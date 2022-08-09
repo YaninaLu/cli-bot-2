@@ -119,17 +119,23 @@ class AssistantBot:
         :param name: name of the person to add
         :param phone: phone of the person to add
         """
-        record = Record()
-        record.save_name(name)
-        if phone:
+        if name in self.addressbook.data:
+            record = self.addressbook.data[name]
             phone_object = Phone()
             phone_object.save_phone(phone)
-            record.add_phone(phone_object)
-        return self.addressbook.add_record(record)
+            return record.add_phone(phone_object)
+        else:
+            record = Record()
+            record.save_name(name)
+            if phone:
+                phone_object = Phone()
+                phone_object.save_phone(phone)
+                record.add_phone(phone_object)
+            return self.addressbook.add_record(record)
 
 
     @input_error
-    def change(self, name: str, phone_to_change: str, new_phone: str) -> None:
+    def change(self, name: str, new_phone: str) -> None:
         """
         Calls a function that changes the phone number of the given person.
 
@@ -138,7 +144,9 @@ class AssistantBot:
         :param name: name that has to be already present in the addressbook
         """
         record = self.addressbook.data[name]
-        return record.change_phone(phone_to_change, new_phone)
+        phone_object = Phone()
+        phone_object.save_phone(new_phone)
+        return record.change_phone(phone_object)
 
     @input_error
     def show(self, name: str) -> str:
@@ -163,7 +171,7 @@ class AssistantBot:
 class AddressBook(UserDict):
     def add_record(self, record):
         if record.name.value not in self.data:
-            self.data[record.name.value] = record.phones
+            self.data[record.name.value] = record
         else:
             raise ValueError(
                 "This name is already in your phonebook. If you want to change the phone number, type 'change'.")
@@ -177,7 +185,7 @@ class AddressBook(UserDict):
         """
         if name == "all":
             if self.data:
-                return self.__str__()
+                return str(self)
             else:
                 return "You do not have any contacts yet."
         else:
@@ -185,8 +193,8 @@ class AddressBook(UserDict):
 
     def __str__(self):
         result = ""
-        for key, value in self.data.items():
-            result += f"Name: {key}, phones: {value}\n"
+        for name, record in self.data.items():
+            result += str(record)
         return result
 
 
@@ -202,12 +210,17 @@ class Record:
         self.phones.append(phone)
 
     def delete_phone(self, phone):
-        index = self.phones.index(phone)
-        self.phones.remove(index)
+        for phone_object in self.phones:
+            if phone_object.phone == phone:
+                self.phones.remove(phone_object)
 
-    def change_phone(self, phone_to_change, new_phone):
-        self.delete_phone(phone_to_change)
+    def change_phone(self, new_phone):
+        self.phones.clear()
         self.phones.append(new_phone)
+
+    def __str__(self):
+        phones = ", ".join(map(lambda phone: str(phone), self.phones))
+        return f"Name: {self.name}, phones: {phones}\n"
 
 
 class Field:
@@ -220,6 +233,8 @@ class Name(Field):
         super().__init__()
         self.value = name
 
+    def __str__(self):
+        return f"{self.value}"
 
 class Phone(Field):
     def __init__(self):
