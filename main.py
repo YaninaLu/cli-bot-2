@@ -7,8 +7,8 @@ class CliApp:
     """
     Communicates with the user.
 
-    Takes input from the user, parses it and sends it to the assistant bot. It outputs the result that
-    returns from the bot and terminates the app when the user inputs one of the stop words.
+    Takes input from the user, parses it and sends it to the assistant bot. Responds with the result
+    from the bot. Terminates the app when the user inputs one of the stop words.
     """
 
     def run(self):
@@ -19,7 +19,7 @@ class CliApp:
         """
         bot = AssistantBot()
         while True:
-            command, args = self.parse_command(input().lower())
+            command, args = self.parse_command(input())
             if command in ["good bye", "close", "exit"]:
                 print("Good bye!")
                 break
@@ -31,22 +31,22 @@ class CliApp:
     @staticmethod
     def parse_command(user_input: str) -> Tuple[str, list[str]]:
         """
-        Parses the string input into a tuple of command and arguments.
+        Parses the input into a command and zero or more arguments.
 
         :param user_input: a string that user provides
         :return: tuple(command, *args)
         """
-        user_input = user_input.split()
         if len(user_input) == 0:
             raise ValueError()
-        command = user_input[0]
+        user_input = user_input.split()
+        command = user_input[0].lower()
         args = user_input[1:]
         return command, args
 
 
 class AssistantBot:
     """
-    Identifies and calls functions that correspond to the users commands. Catches exceptions on the domain level.
+    Assists a user with managing their address book (adding, deleting, changing, displaying entries).
     """
 
     def __init__(self):
@@ -63,14 +63,10 @@ class AssistantBot:
     @staticmethod
     def input_error(func: Callable) -> Callable[[tuple[Any, ...]], str | Any]:
         """
-        Catches exceptions on the domain level (i.e. mistakes that prevent functions to fulfil their promises).
-
-        :param func: function to execute
-        :return: inner function that checks for exceptions when the function to execute is run
+        A decorator that catches the domain-level exceptions and returns human-readable error message.
         """
 
         def exception_handler(*args, **kwargs):
-
             try:
                 result = func(*args, **kwargs)
             except TypeError as err:
@@ -87,11 +83,11 @@ class AssistantBot:
     @input_error
     def handle(self, command: str, args: List[str]) -> str:
         """
-        An entry point for the commands given by the user. It takes a function and calls it with the given arguments.
+        Calls the command and returns a result of it.
 
         :param command: command given by the user
-        :param args: arguments to call the function with
-        :return: function call with the given arguments
+        :param args: arguments to call the command with
+        :return: command to execute with the arguments
         """
         handler = self.commands[command]
         return handler(*args)
@@ -109,10 +105,10 @@ class AssistantBot:
     @input_error
     def add(self, name: str, phone: None | str = None) -> None:
         """
-        Calls a function that adds the given phone number to the addressbook.
+        Calls and returns a function that adds the given phone number to the addressbook.
 
-        :param name: name of the person to add
-        :param phone: phone of the person to add
+        :param name: name of the person to add, compulsory field
+        :param phone: phone of the person to add, optional field
         """
         if name in self.addressbook.data:
             record = self.addressbook.data[name]
@@ -126,11 +122,11 @@ class AssistantBot:
     @input_error
     def change(self, name: str, old_phone: str, new_phone: str) -> None:
         """
-        Calls a function that changes the phone number of the given person.
+        Calls and returns a function that replaces the phone number of the given person.
 
         :param new_phone: a new phone number
         :param old_phone: a number to delete
-        :param name: name that has to be already present in the addressbook
+        :param name: a name that has to be already present in the address book
         """
         record = self.addressbook.data[name]
         record.delete_phone(old_phone)
@@ -139,16 +135,16 @@ class AssistantBot:
     @input_error
     def show(self, name: str) -> str:
         """
-        Calls a function that shows the phone number of the given person.
+        Returns the phone number of the given person.
 
-        :param name: name of a person or 'all' if the user wants all the addressbook to be printed
+        :param name: name of a person or 'all' if the user wants all the address book to be printed
         :return: phone number or the whole addressbook
         """
         return self.addressbook.show_phone(name)
 
     def delete(self, name: str, phone: str) -> None:
         """
-        Calls a function that deletes the given phone number from the record of the given person.
+        Calls and returns a function that deletes the given phone number from the record of the given person.
 
         :param name: whose phone the user wants to delete
         :param phone: a phone to delete
@@ -192,16 +188,16 @@ class Phone(Field):
 
     def __init__(self, phone: str):
         super().__init__()
-        self._verify(phone)
+        self.__verify(phone)
         self.value = phone
 
     @staticmethod
-    def _verify(phone: str):
+    def __verify(phone: str):
         """
-        Checks if the phone number is valid. Throws exception if it's not valid.
+        Checks if the phone number is valid. Throws an exception if it's not valid.
 
         :param phone: phone number as a string
-        :return: exception if it doesn't match the needed pattern, otherwise True
+        :return: exception if it doesn't match the needed pattern
         """
         if not match(r"(\+?\d{12}|\d{10})", phone):
             raise ValueError("Invalid phone format. Try +123456789012 or 1234567890.")
@@ -209,12 +205,13 @@ class Phone(Field):
 
 class Record:
     """
-    Users name and phones. Name field is compulsory, while phones field is optional and can be omitted.
+    A record about a person in an address book. Name field is compulsory, while phones field is optional and can
+    be omitted.
     """
 
     def __init__(self, name: str):
-        if not Name:
-            raise ValueError("The record can't be without a name")
+        if not name:
+            raise ValueError("The record must have a name.")
         self.name = Name(name)
         self.phones = []
 
@@ -222,7 +219,7 @@ class Record:
         """
         Adds a phone to the record.
 
-        :param phone: phone number
+        :param phone: a phone number
         """
         phone_object = Phone(phone)
         self.phones.append(phone_object)
@@ -233,11 +230,23 @@ class Record:
 
         :param phone: a phone number to delete
         """
+
+        phone = self.find_phone(phone)
+        if phone:
+            self.phones.remove(phone)
+        else:
+            raise ValueError("The given phone is not in a list.")
+
+    def find_phone(self, phone: str) -> Phone:
+        """
+        Finds and returns a phone from the phone list.
+
+        :param phone: phone to search
+        :return: an entry in a phone list corresponding to this phone
+        """
         for phone_object in self.phones:
-            if phone_object.phone == phone:
-                self.phones.remove(phone_object)
-                return
-        raise ValueError("The given phone is not in a list.")
+            if phone_object.value == phone:
+                return phone_object
 
     def __str__(self):
         phones = ", ".join(map(lambda phone: str(phone), self.phones))
@@ -251,7 +260,8 @@ class AddressBook(UserDict):
 
     def add_record(self, record: Record) -> None:
         """
-        Adds a new record to the address book.
+        Adds a new record to the address book. If the name is already present in the book, it either offers to change
+        the phone corresponding to it or add a new phone number to the record.
 
         :param record: a record to add
         """
@@ -264,7 +274,7 @@ class AddressBook(UserDict):
 
     def show_phone(self, name: str) -> str:
         """
-        Shows the phone number of a given person. If 'all' was given as an argument it returns the whole phonebook.
+        Returns the phone number of a given person. If 'all' was given as an argument it returns the whole phonebook.
 
         :param name: name to show or 'all'
         :return: phone number or addressbook as a string
@@ -273,9 +283,12 @@ class AddressBook(UserDict):
             if self.data:
                 return str(self)
             else:
-                "You do not have any contacts yet."
+                return "You do not have any contacts yet."
         else:
-            return str(self.data[name])
+            if name in self.data:
+                return str(self.data[name])
+            else:
+                return "You don't have a contact with this name in your address book."
 
     def __str__(self):
         result = ""
@@ -284,9 +297,5 @@ class AddressBook(UserDict):
         return result
 
 
-def main():
-    CliApp().run()
-
-
 if __name__ == "__main__":
-    main()
+    CliApp().run()
