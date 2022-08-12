@@ -20,8 +20,8 @@ class CliApp:
         bot = AssistantBot()
         while True:
             command, args = self.parse_command(input())
-            if command in ["good bye", "close", "exit"]:
-                print("Good bye!")
+            if command in ["goodbye", "close", "exit"]:
+                print("Goodbye!")
                 break
             else:
                 result = bot.handle(command, args)
