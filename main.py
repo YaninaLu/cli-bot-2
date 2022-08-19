@@ -1,7 +1,7 @@
 from collections import UserDict
 from typing import Tuple, Callable, List, Any
 from re import match
-from datetime import datetime, date, timedelta
+from datetime import datetime
 
 
 class CliApp:
@@ -153,7 +153,7 @@ class AssistantBot:
                 record = Record(args[0])
                 self.addressbook.add_record(record)
 
-            if match(r"(\+?\d{12}|\d{10})", args[1]):
+            if Phone.is_valid(args[1]):
                 phone = args[1]
                 return record.add_phone(phone)
             elif match(r"\d{2}\.\d{2}\.\d{4}", args[1]):
@@ -264,6 +264,10 @@ class Phone(Field):
     A phone number of a person in an address book.
     """
 
+    @classmethod
+    def is_valid(cls, value: str):
+        return match(r"(\+?\d{12}|\d{10})", value)
+
     def verify_value(self, value: str):
         """
         Checks if the phone is given in a valid format. Raises exception if the phone doesn't match one of the formats.
@@ -271,7 +275,7 @@ class Phone(Field):
         :param value: phone number
         """
 
-        if not match(r"(\+?\d{12}|\d{10})", value):
+        if not Phone.is_valid(value):
             raise ValueError("Invalid phone format. Try +123456789012 or 1234567890.")
 
 
@@ -369,7 +373,6 @@ class Record:
         self.birthday = Birthday(birthday)
 
     def __str__(self):
-
         phones = ", ".join(map(lambda phone: str(phone), self.phones))
         if self.birthday:
             return f"Name: {self.name}, phones: {phones}, birthday: {self.birthday}, {self.count_days_to_birthday()}"
@@ -386,7 +389,7 @@ class AddressBook(UserDict):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.paginator = None
+        self._paginator = None
 
     def add_record(self, record: Record):
         """
@@ -419,15 +422,12 @@ class AddressBook(UserDict):
             else:
                 return "You do not have any contacts yet."
         elif name == "page":
-            result = []
-            if not self.paginator:
-                self.paginator = self.iterator()
-            page = next(self.paginator, None)
-            if page is None:
-                self.paginator = self.iterator()
-                page = next(self.paginator, None)
-            result.append("\n".join([str(r) for r in page]))
-            return "\n === Page Break === \n".join(result)
+            page_content = next(self.paginator(), None)
+            if not page_content:
+                self._paginator = None
+                return "You reached the end of the address book. Call this command again."
+            else:
+                return "\n".join([str(r) for r in page_content])
         else:
             if name in self.data:
                 return str(self.data[name])
@@ -445,6 +445,11 @@ class AddressBook(UserDict):
             del self.data[name]
         else:
             raise KeyError("This person is not in your address book.")
+
+    def paginator(self):
+        if not self._paginator:
+            self._paginator = self.iterator()
+        return self._paginator
 
     def iterator(self):
         """
