@@ -1,7 +1,7 @@
 from collections import UserDict
 from typing import Tuple, Callable, List, Any
 from re import match
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 
 class CliApp:
@@ -18,6 +18,7 @@ class CliApp:
 
         :return: result of running the command by the bot
         """
+
         bot = AssistantBot()
         try:
             while True:
@@ -40,6 +41,7 @@ class CliApp:
         :param user_input: a string that user provides
         :return: tuple(command, *args)
         """
+
         if len(user_input) == 0:
             raise ValueError()
         user_input = user_input.split()
@@ -93,12 +95,18 @@ class AssistantBot:
         :param args: arguments to call the command with
         :return: command to execute with the arguments
         """
+
         handler = self.commands[command]
         return handler(*args)
 
     @staticmethod
     @input_error
-    def help():
+    def help() -> str:
+        """
+        Displays the help message.
+        :return:
+        """
+
         return "To add a new person type: 'add name phone birthday'.\n" \
                "To add a phone to the existing record type: 'add name phone'.\n" \
                "To add a birthday to the existing record type: 'add name birthday'.\n" \
@@ -119,26 +127,26 @@ class AssistantBot:
 
         :return: greeting string
         """
+
         return "How can I help you?"
 
     @input_error
     def add(self, *args) -> None:
         """
-        Calls and returns a function that adds the given phone number to the addressbook.
-
-        :param name: name of the person to add, compulsory field
-        :param phone: phone of the person to add, optional field
+        Calls and returns a function that adds the given information about a person to the addressbook.
         """
 
         if len(args) == 3:
+
             name, phone, birthday = args
             record = Record(name)
             record.add_phone(phone)
-
             birthday_date = datetime.strptime(birthday, "%d.%m.%Y").date()
             record.add_birthday(birthday_date)
             return self.addressbook.add_record(record)
+
         elif len(args) == 2:
+
             if args[0] in self.addressbook:
                 record = self.addressbook.data[args[0]]
             else:
@@ -154,7 +162,9 @@ class AssistantBot:
                 return record.add_birthday(birthday_date)
             else:
                 raise ValueError("The format of your entry isn't right. Type in 'help' to see possible formats.")
+
         elif len(args) == 1:
+
             record = Record(args[0])
             return self.addressbook.add_record(record)
 
@@ -167,6 +177,7 @@ class AssistantBot:
         :param old_phone: a number to delete
         :param name: a name that has to be already present in the address book
         """
+
         record = self.addressbook.data[name]
         record.delete_phone(old_phone)
         return record.add_phone(new_phone)
@@ -174,11 +185,13 @@ class AssistantBot:
     @input_error
     def show(self, name: str) -> str:
         """
-        Returns the phone number of the given person.
+        Returns the record of the given person as a human-readable message.
 
-        :param name: name of a person or 'all' if the user wants all the address book to be printed
-        :return: phone number or the whole addressbook
+        :param name: name of a person, 'all' if the user wants all the address book to be printed, 'page' if the
+        user wants to see the address book page by page
+        :return: information about a person, the whole address book, one page of the address book
         """
+
         return self.addressbook.show_record(name)
 
     def delete(self, name: str, phone: str | None = None) -> None:
@@ -187,8 +200,9 @@ class AssistantBot:
         whole record.
 
         :param name: whose phone the user wants to delete
-        :param phone: a phone to delete
+        :param phone: a phone to delete (optional)
         """
+
         if phone:
             record = self.addressbook.data[name]
             return record.delete_phone(phone)
@@ -233,7 +247,14 @@ class Name(Field):
     A name of a person in an address book.
     """
 
-    def verify_value(self, value):
+    def verify_value(self, value: str):
+        """
+        Verifies that name consists only of alphabetical characters. Raises exception if the name contains something
+        besides latin letters.
+
+        :param value: a name to check
+        """
+
         if not match(r"\b[A-Za-z]+", value):
             raise ValueError("Name can contain only latin letters.")
 
@@ -243,22 +264,37 @@ class Phone(Field):
     A phone number of a person in an address book.
     """
 
-    def verify_value(self, value):
+    def verify_value(self, value: str):
+        """
+        Checks if the phone is given in a valid format. Raises exception if the phone doesn't match one of the formats.
+
+        :param value: phone number
+        """
+
         if not match(r"(\+?\d{12}|\d{10})", value):
             raise ValueError("Invalid phone format. Try +123456789012 or 1234567890.")
 
 
 class Birthday(Field):
+    """
+    Person's birthday date.
+    """
 
-    def verify_value(self, value):
+    def verify_value(self, value: datetime.date):
+        """
+        Checks if the birthdate is not in the future. Raises exception if the date is in the future.
+
+        :param value: datetime object
+        """
+
         if value > datetime.now().date():
             raise ValueError("Birthday can't be in future.")
 
 
 class Record:
     """
-    A record about a person in an address book. Name field is compulsory, while phones field is optional and can
-    be omitted.
+    A record about a person in an address book. Name field is compulsory, while phones and birthday fields are optional
+    and can be omitted.
     """
 
     def __init__(self, name: str):
@@ -274,12 +310,13 @@ class Record:
 
         :param phone: a phone number
         """
+
         phone_object = Phone(phone)
         self.phones.append(phone_object)
 
     def delete_phone(self, phone: str) -> None:
         """
-        Deletes a phone from the record.
+        Deletes a phone from the record. Raises exception if there is no such phone in the record.
 
         :param phone: a phone number to delete
         """
@@ -297,13 +334,21 @@ class Record:
         :param phone: phone to search
         :return: an entry in a phone list corresponding to this phone
         """
+
         for phone_object in self.phones:
             if phone_object.value == phone:
                 return phone_object
 
-    def count_days_to_birthday(self):
+    def count_days_to_birthday(self) -> str:
+        """
+        Counts the days left to the birthdate of the given person.
+
+        :return: a message that contains a number of days left or a reminder that a person has their birthday today
+        """
+
         today = datetime.now().date()
         this_years_birthday = self.birthday.value.replace(year=today.year)
+
         if today < this_years_birthday:
             difference = this_years_birthday - today
             return f"there are {difference.days} days to this person's birthday"
@@ -314,10 +359,17 @@ class Record:
             difference = next_years_birthday - today
             return f"there are {difference.days} days to this person's birthday"
 
-    def add_birthday(self, birthday: date):
+    def add_birthday(self, birthday: datetime.date):
+        """
+        Adds a birthdate to the record.
+
+        :param birthday: datetime object
+        """
+
         self.birthday = Birthday(birthday)
 
     def __str__(self):
+
         phones = ", ".join(map(lambda phone: str(phone), self.phones))
         if self.birthday:
             return f"Name: {self.name}, phones: {phones}, birthday: {self.birthday}, {self.count_days_to_birthday()}"
@@ -336,7 +388,7 @@ class AddressBook(UserDict):
         super().__init__(**kwargs)
         self.paginator = None
 
-    def add_record(self, record: Record) -> None:
+    def add_record(self, record: Record):
         """
         Adds a new record to the address book. If the name is already present in the book, it either offers to change
         the phone corresponding to it or add a new phone number to the record.
@@ -352,10 +404,11 @@ class AddressBook(UserDict):
 
     def show_record(self, name: str) -> str:
         """
-        Returns the info of a given person. If 'all' was given as an argument it returns the whole phonebook.
+        Returns the info of a given person. If 'all' was given as an argument it returns the whole phonebook. If 'page'
+        was given as an argument is shows the next page.
 
-        :param name: name to show or 'all'
-        :return: phone number or addressbook as a string
+        :param name: name to show, 'all' or 'page'
+        :return: a phone number, an addressbook, a page
         """
         if name == "all":
             if self.data:
@@ -381,10 +434,25 @@ class AddressBook(UserDict):
             else:
                 return "You don't have a contact with this name in your address book."
 
-    def delete_record(self, name):
-        del self.data[name]
+    def delete_record(self, name: str) -> None:
+        """
+        Deletes the record of a person from an address book. Raises exception if this person is not in an address book.
+
+        :param name: name of a person to delete
+        """
+
+        if name in self.data:
+            del self.data[name]
+        else:
+            raise KeyError("This person is not in your address book.")
 
     def iterator(self):
+        """
+        Yields pages of two entries from the address book.
+
+        :return: one page of the address book
+        """
+
         page_start = 0
         while True:
             values = list(self.data.values())
