@@ -62,7 +62,8 @@ class AssistantBot:
             "delete": self.delete,
             "change": self.change,
             "show": self.show,
-            "help": self.help
+            "help": self.help,
+            "search": self.search
         }
         self.addressbook = AddressBook()
 
@@ -116,6 +117,8 @@ class AssistantBot:
                "To see a particular phone type: 'show name'.\n" \
                "To see part of the address book type: 'show num_of_entries'.\n" \
                "To see the whole address book type: 'show all'.\n" \
+               "To search contacts by name type: 'search name'.\n" \
+               "To search contacts by phone number type: 'search phone'.\n" \
                "Possible phone formats: +123456789011 or 123456789011 or 1234567890.\n" \
                "Possible birthday format: dd.mm.yyyy.\n"
 
@@ -209,6 +212,14 @@ class AssistantBot:
         else:
             return self.addressbook.delete_record(name)
 
+    def search(self, needle):
+        if needle.isdigit():
+            return self.addressbook.search_by_phone(needle)
+        elif needle.isalpha():
+            return self.addressbook.search_by_name(needle)
+        else:
+            raise ValueError("Enter either part of a name or part of a phone number.")
+
 
 class Field:
     """
@@ -227,6 +238,9 @@ class Field:
 
     def __eq__(self, o: object) -> bool:
         return self.value == o
+
+    def __contains__(self, needle):
+        return True if needle in self.value else False
 
     @staticmethod
     def verify_value(value):
@@ -470,6 +484,29 @@ class AddressBook(UserDict):
                 page_end = page_start + AddressBook.PAGE_SIZE
             yield values[page_start:page_end]
             page_start = page_end
+
+    def search_by_phone(self, needle):
+        result = ""
+        for record in self.data.values():
+            for phone in record.phones:
+                if needle in phone:
+                    result += str(record) + "\n"
+
+        if result:
+            return result
+        else:
+            raise "Sorry, couldn't find any phones with this combination of digits."
+
+    def search_by_name(self, needle):
+        result = ""
+        for record in self.data.values():
+            if needle in record.name:
+                result += str(record) + "\n"
+
+        if result:
+            return result
+        else:
+            raise "Sorry, couldn't find any names with this combination of letters."
 
     def __str__(self):
         result = ""
