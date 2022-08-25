@@ -2,6 +2,8 @@ from collections import UserDict
 from typing import Tuple, Callable, List, Any
 from re import match
 from datetime import datetime
+import json
+import os
 
 
 class CliApp:
@@ -9,7 +11,8 @@ class CliApp:
     Communicates with the user.
 
     Takes input from the user, parses it and sends it to the assistant bot. Responds with the result
-    from the bot. Terminates the app when the user inputs one of the stop words.
+    from the bot. Terminates the app when the user inputs one of the stop words. Before terminating, saves the contacts
+    into a file and restores them from the file when run again.
     """
 
     def run(self):
@@ -20,10 +23,13 @@ class CliApp:
         """
 
         bot = AssistantBot()
+        bot.restore_data()
+
         try:
             while True:
                 command, args = self.parse_command(input())
                 if command in ["goodbye", "close", "exit"]:
+                    bot.backup_data()
                     print("Goodbye!")
                     break
                 else:
@@ -66,6 +72,22 @@ class AssistantBot:
             "search": self.search
         }
         self.addressbook = AddressBook()
+        self.backup_file = "address_book.json"
+
+    def backup_data(self) -> None:
+        """
+        Calls and returns a function that save the contacts into a file.
+        """
+        return self.addressbook.save_contacts(self.backup_file)
+
+    def restore_data(self) -> None:
+        """
+        Calls and returns a function that restores contacts from the file. If the file is empty, it does nothing.
+        """
+
+        if os.stat(self.backup_file).st_size == 0:
+            return
+        return self.addressbook.restore_contacts(self.backup_file)
 
     @staticmethod
     def input_error(func: Callable) -> Callable[[tuple[Any, ...]], str | Any]:
@@ -124,7 +146,7 @@ class AssistantBot:
 
     @staticmethod
     @input_error
-    def hello():
+    def hello() -> str:
         """
         Returns a greeting to the 'hello' command.
 
@@ -212,7 +234,14 @@ class AssistantBot:
         else:
             return self.addressbook.delete_record(name)
 
-    def search(self, needle):
+    def search(self, needle: str) -> str:
+        """
+        Calls and returns a function that searches contacts that have coincidences with the user query.
+
+        :param needle: letters or digits to search
+        :return: contacts that contain given letters or digits
+        """
+
         if needle.isdigit():
             return self.addressbook.search_by_phone(needle)
         elif needle.isalpha():
@@ -405,7 +434,7 @@ class AddressBook(UserDict):
         super().__init__(**kwargs)
         self._paginator = None
 
-    def add_record(self, record: Record):
+    def add_record(self, record: Record) -> None:
         """
         Adds a new record to the address book. If the name is already present in the book, it either offers to change
         the phone corresponding to it or add a new phone number to the record.
@@ -465,7 +494,7 @@ class AddressBook(UserDict):
             self._paginator = self.iterator()
         return self._paginator
 
-    def iterator(self):
+    def iterator(self) -> list:
         """
         Yields pages of two entries from the address book.
 
@@ -485,7 +514,14 @@ class AddressBook(UserDict):
             yield values[page_start:page_end]
             page_start = page_end
 
-    def search_by_phone(self, needle):
+    def search_by_phone(self, needle: str) -> str:
+        """
+        Searches records that contain a given combination of digits.
+
+        :param needle: combination of digits to search
+        :return: corresponding contacts
+        """
+
         result = ""
         for record in self.data.values():
             for phone in record.phones:
@@ -497,7 +533,14 @@ class AddressBook(UserDict):
         else:
             raise "Sorry, couldn't find any phones with this combination of digits."
 
-    def search_by_name(self, needle):
+    def search_by_name(self, needle: str) -> str:
+        """
+        Searches records that contain a given combination of digits.
+
+        :param needle: combination of letters to search
+        :return: corresponding contacts
+        """
+
         result = ""
         for record in self.data.values():
             if needle in record.name:
@@ -507,6 +550,42 @@ class AddressBook(UserDict):
             return result
         else:
             raise "Sorry, couldn't find any names with this combination of letters."
+
+    def save_contacts(self, backup_file: str) -> None:
+        """
+        Saves the address book into a file.
+
+        :param backup_file: name of a backup file
+        """
+
+        if len(self.data) == 0:
+            raise "You have no contacts to save."
+
+        data_to_save = []
+        for record in self.data.values():
+            persons_record = {"name": record.name.value, "phones": [phone.value for phone in record.phones],
+                              "birthday": record.birthday.value.strftime("%d.%m.%Y")}
+            data_to_save.append(persons_record)
+
+        with open(backup_file, "w") as json_file:
+            json.dump(data_to_save, json_file)
+
+    def restore_contacts(self, backup_file: str) -> None:
+        """
+        Restores the address book from the file.
+
+        :param backup_file: name of a backup file
+        """
+
+        with open(backup_file, "r") as json_file:
+            unpacked_contacts = json.load(json_file)
+
+        for contact in unpacked_contacts:
+            record = Record(contact["name"])
+            for phone in contact["phones"]:
+                record.add_phone(phone)
+            record.add_birthday(datetime.strptime(contact["birthday"], "%d.%m.%Y").date())
+            self.data[record.name] = record
 
     def __str__(self):
         result = ""
