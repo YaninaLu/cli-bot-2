@@ -545,7 +545,7 @@ class AddressBook(UserDict):
 
     def restore_contacts(self, backup_file: str) -> None:
         """
-        Restores the address book from the file.
+        Restores the address book from the file. Throws an exception if the file cannot be decoded by JSON.
 
         :param backup_file: name of a backup file
         """
