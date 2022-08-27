@@ -5,6 +5,8 @@ from datetime import datetime
 import json
 import os
 
+DATE_FORMAT = "%d.%m.%Y"
+
 
 class CliApp:
     """
@@ -166,7 +168,7 @@ class AssistantBot:
             name, phone, birthday = args
             record = Record(name)
             record.add_phone(phone)
-            birthday_date = datetime.strptime(birthday, "%d.%m.%Y").date()
+            birthday_date = datetime.strptime(birthday, DATE_FORMAT).date()
             record.add_birthday(birthday_date)
             return self.addressbook.add_record(record)
 
@@ -183,7 +185,7 @@ class AssistantBot:
                 return record.add_phone(phone)
             elif match(r"\d{2}\.\d{2}\.\d{4}", args[1]):
                 birthday = args[1]
-                birthday_date = datetime.strptime(birthday, "%d.%m.%Y").date()
+                birthday_date = datetime.strptime(birthday, DATE_FORMAT).date()
                 return record.add_birthday(birthday_date)
             else:
                 raise ValueError("The format of your entry isn't right. Type in 'help' to see possible formats.")
@@ -241,13 +243,7 @@ class AssistantBot:
         :param needle: letters or digits to search
         :return: contacts that contain given letters or digits
         """
-
-        if needle.isdigit():
-            return self.addressbook.search_by_phone(needle)
-        elif needle.isalpha():
-            return self.addressbook.search_by_name(needle)
-        else:
-            raise ValueError("Enter either part of a name or part of a phone number.")
+        return self.addressbook.search(needle)
 
 
 class Field:
@@ -514,42 +510,18 @@ class AddressBook(UserDict):
             yield values[page_start:page_end]
             page_start = page_end
 
-    def search_by_phone(self, needle: str) -> str:
+    def search(self, needle: str) -> str:
         """
-        Searches records that contain a given combination of digits.
+        Searches records that contain a given combination of digits or letters.
 
-        :param needle: combination of digits to search
+        :param needle: combination of digits or letters to search
         :return: corresponding contacts
         """
-
-        result = ""
-        for record in self.data.values():
-            for phone in record.phones:
-                if needle in phone:
-                    result += str(record) + "\n"
-
+        result = filter(lambda x: needle in str(x), self.data.values())
         if result:
-            return result
+            return "\n".join([str(r) for r in result])
         else:
             raise "Sorry, couldn't find any phones with this combination of digits."
-
-    def search_by_name(self, needle: str) -> str:
-        """
-        Searches records that contain a given combination of digits.
-
-        :param needle: combination of letters to search
-        :return: corresponding contacts
-        """
-
-        result = ""
-        for record in self.data.values():
-            if needle in record.name:
-                result += str(record) + "\n"
-
-        if result:
-            return result
-        else:
-            raise "Sorry, couldn't find any names with this combination of letters."
 
     def save_contacts(self, backup_file: str) -> None:
         """
@@ -563,8 +535,9 @@ class AddressBook(UserDict):
 
         data_to_save = []
         for record in self.data.values():
-            persons_record = {"name": record.name.value, "phones": [phone.value for phone in record.phones],
-                              "birthday": record.birthday.value.strftime("%d.%m.%Y")}
+            persons_record = \
+                {"name": record.name.value, "phones": [phone.value for phone in record.phones if len(record.phones) > 0],
+                 "birthday": record.birthday.value.strftime(DATE_FORMAT) if record.birthday else None}
             data_to_save.append(persons_record)
 
         with open(backup_file, "w") as json_file:
@@ -577,15 +550,19 @@ class AddressBook(UserDict):
         :param backup_file: name of a backup file
         """
 
-        with open(backup_file, "r") as json_file:
-            unpacked_contacts = json.load(json_file)
+        try:
+            with open(backup_file, "r") as json_file:
+                unpacked_contacts = json.load(json_file)
 
-        for contact in unpacked_contacts:
-            record = Record(contact["name"])
-            for phone in contact["phones"]:
-                record.add_phone(phone)
-            record.add_birthday(datetime.strptime(contact["birthday"], "%d.%m.%Y").date())
-            self.data[record.name] = record
+            for contact in unpacked_contacts:
+                record = Record(contact["name"])
+                for phone in contact["phones"]:
+                    record.add_phone(phone)
+                if contact["birthday"]:
+                    record.add_birthday(datetime.strptime(contact["birthday"], DATE_FORMAT).date())
+                self.data[record.name] = record
+        except json.decoder.JSONDecodeError:
+            raise ValueError("Cannot restore contacts from file")
 
     def __str__(self):
         result = ""
